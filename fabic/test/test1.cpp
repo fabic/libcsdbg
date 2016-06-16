@@ -7,12 +7,17 @@
  * intent of converting it back to std::string, it appears).
  *
  * Buid with :
- *     $CXX -std=c++11 -lboost_program_options -o test1 fabic/test/test1.cpp
+ *     $CXX -g -rdynamic -std=c++14 -frtti -L ~/boost-1.61.0-$CC/lib -I.. -L. -Wl,-rpath=. -lboost_program_options -lcsdbg -ldl -lbfd -lpthread -o test1 fabic/test/test1.cpp
  *
  * FabiC 2016-06-16 https://github.com/fabic/libcsdbg/
  */
+
 #include <boost/program_options.hpp>
 #include <iostream>
+
+// We pass -I.. for compiling so that we may do this
+// (because include/... isn't "namespaced").
+#include "libcsdbg/include/tracer.hpp"
 
 namespace fabic {
     namespace plays {
@@ -22,24 +27,26 @@ namespace fabic {
         using program_arguments = po::variables_map;
 
         /**
-         * MAIN
+         * MAIN which accepts
          */
         int main(program_arguments& args) {
 
-            std::cout << "Hello world! (libcsdbg test 1)" << std::endl;
+            std::cout << "Hello world, you reached this point, can't believe it!"
+                         " (libcsdbg test 1)" << std::endl;
 
             return 0;
         }
 
+
         /**
-         * Resort to Boost's program_options lib. for parsing program command
-         * line arguments.
+         * Resort to Boost's program_options lib.
+         * for parsing command line arguments.
          *
          * @param  argc [description]
          * @param  argv [description]
          * @return      [description]
          */
-        po::variables_map
+        program_arguments
         process_program_arguments(int argc, const char *const argv[])
         {
             namespace po = boost::program_options;
@@ -80,7 +87,6 @@ namespace fabic {
 } // fabic ns.
 
 
-
 /**
  * Invoqued by main() within a try-catch
  * (caught exception here is forwarded).
@@ -102,11 +108,21 @@ int main_bis(int argc, const char *argv[])
     return 127;
 }
 
+
 /**
  * C-style main() actual entry point.
  */
 int main(int argc, const char *argv[])
 {
+    // Init. libcsdbg's tracer thing :
+    using namespace csdbg;
+
+    tracer *iface = tracer::interface();
+    if ( unlikely(iface == NULL) ) {
+        std::cerr << "FAILED! couldn't initialize libcsdbg's tracer thing." << std::endl;
+        return 126;
+    }
+
     try {
         return main_bis(argc, argv);
     }
