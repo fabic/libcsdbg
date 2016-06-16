@@ -7,6 +7,11 @@
 	@brief Library configuration, type, macro and global variable definition
 */
 
+//
+// FABIC 2016-06-16 : quickfix include our dummy `config.h` file
+//                    because the bfd.h (system header) gets in the way.
+#include "../config.h"
+
 #include <typeinfo>
 #include <iostream>
 
