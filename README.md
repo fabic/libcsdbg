@@ -19,7 +19,7 @@ _Couldn't find any SVN / Git repository for this so I'm quickly adding it under 
 ## Build instructions
 
 * See <http://libcsdbg.sourceforge.net/index.html#sec3>
-* See the [Makefile](blob/master/Makefile)
+* See the [Makefile](Makefile)
 
 ### Just run `make`
 
