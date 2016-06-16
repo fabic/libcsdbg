@@ -8,7 +8,7 @@ PLATFORM		=
 
 
 # Tools
-CPP					=		$(PLATFORM)g++
+CXX					=		$(PLATFORM)g++
 STRIP				=		$(PLATFORM)strip -s
 MKDIR				=		mkdir -p
 TOUCH				=		touch
@@ -170,8 +170,8 @@ default:
 
 	# Compute library module dependencies
 	$(foreach m, $(MODS),																												\
-		$(CPP) -MM -MT .build/$(m).o -Iinclude src/$(m).cpp >> .deps;							\
-		$(ECHO) -n '\t$$(CPP) $$(CFLAGS) -c -o .build/$(m).o ' >> .deps;					\
+		$(CXX) -MM -MT .build/$(m).o -Iinclude src/$(m).cpp >> .deps;							\
+		$(ECHO) -n '\t$$(CXX) $$(CFLAGS) -c -o .build/$(m).o ' >> .deps;					\
 		$(ECHO) 'src/$(m).cpp\n' >> .deps;																				\
 	)
 
@@ -185,7 +185,7 @@ $(eval $(shell if [ -e '.deps' ]; then echo 'include .deps'; fi))
 
 
 $(TARGET): $(foreach m, $(MODS), .build/$(m).o)
-	$(CPP) $(CFLAGS) -shared -o .build/$@ $(foreach m, $(MODS), .build/$(m).o)
+	$(CXX) $(CFLAGS) -shared -o .build/$@ $(foreach m, $(MODS), .build/$(m).o)
 	$(STRIP) .build/$@
 
 
