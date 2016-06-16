@@ -8,7 +8,8 @@ PLATFORM		=
 
 
 # Tools
-CXX					=		$(PLATFORM)g++
+#CXX					=		$(PLATFORM)g++
+CXX					=		$(PLATFORM)clang++
 STRIP				=		$(PLATFORM)strip -s
 MKDIR				=		mkdir -p
 TOUCH				=		touch
@@ -65,7 +66,9 @@ DOPTS				+=	CSDBG_WITH_FILTER
 
 # -f options
 FOPTS				=		PIC
-FOPTS				+=	no-enforce-eh-specs
+# FABIC: Clang++ doesn't support this one flag
+#        See http://clang-developers.42468.n3.nabble.com/Does-clang-support-fno-enforce-eh-specs-option-of-gcc-td4028196.html (2012 forum thread)
+#FOPTS				+=	no-enforce-eh-specs
 FOPTS				+=	strict-aliasing
 
 # -W options
