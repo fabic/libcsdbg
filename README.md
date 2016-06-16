@@ -16,4 +16,13 @@ _Couldn't find any SVN / Git repository for this so I'm quickly adding it under 
 * Added a symlink `build` to the hidden `.build/` directory.
 * _(Note that a `.deps` file left by `make` may get in your way)._
 
+## Build instructions
+
+* See <http://libcsdbg.sourceforge.net/index.html#sec3>
+* See the [Makefile](blob/master/Makefile)
+
+### Just run `make`
+
+    make
+
 _**EOF**_
