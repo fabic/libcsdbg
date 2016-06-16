@@ -1,0 +1,1797 @@
+/**
+@mainpage Overview
+
+@section sec1 Introduction
+<hr>
+@subsection sec1_1 Description
+
+Project <b>libcsdbg</b> is a <b>C++ exception (and generic) stack tracer</b>.
+When an exception is thrown, caught and handled, libcsdbg offers the tools to
+create, process and output the exception stack trace, the path the exception has
+propagated up the call stack, unwinding it, up to the section were it was
+handled. The traces are fully detailed with demangled function signatures and
+additional <b>addr2line</b> information (the source code file and line that each
+function was called). Libcsdbg will perform flawlessly with single-thread and
+multi-thread (or multi-process) programs, with any <b>dynamically linked shared
+object</b> (<b>DSO</b> - Dynamic Shared Object) and with any statically linked
+library. Additionally, libcsdbg helps the developer/tester create sophisticated
+stack traces <b>of any thread, at any given moment</b> during the execution of a
+process, or create <b>a dump of the call stacks of all threads</b> as a snapshot
+of the runtime call graph. This is useful in cases of fatal errors, reception of
+terminating signals (such as SIGSEGV) or process abortion/termination. It can
+also prove a great tool to detect and resolve deadlocks.
+
+In an object oriented programming paradigm, it's usually not enough to catch and
+handle an exception. It's essential to know at runtime, <i>where</i> in the code
+and under <i>what circumstances</i> the exception was thrown and also the path
+that the exception followed from the throw point up to the point where it was
+caught. Although much of this information can be embedded inside the exception
+object, this has several drawbacks, namely:
+
+<ul>
+<li>It's not a complete solution
+<li>It needs lots of code to keep track (the exception objects must have small footprint)
+<li>It can't function with STL exceptions and integral types
+<li>It's difficult to make it generic and portable
+</ul>
+
+In Java, method <b>java.lang.throwable.prinStackTrace</b> can provide this
+additional exception information, because the Java language is interpreted, not
+native, as C++ is. To implement this with
+<a href="http://gcc.gnu.org/"><b>GNU g++</b></a>, libcsdbg exploits the compiler
+code generation features, to inject code for <b>function instrumentation</b>.
+Compiling code with the <i>-finstrument-functions</i> flag, commands g++ to
+inject calls to the instrumentation functions (<b>__cyg_profile_func_enter</b>,
+<b>__cyg_profile_func_exit</b>) at the beginning and end of all the instrumented
+user functions, respectively. The compiled code is then linked with libcsdbg
+that implements these two functions.
+
+At runtime, libcsdbg uses these functions to transparently <b>simulate</b> the
+call stack of each thread of execution within the debugged process, adding only
+<b>minimum overhead</b>. When an exception is thrown the actual thread stack is
+unwound until a catch section is found or until the process aborts, because of
+the unhandled exception. The stack simulator detects there is an exception being
+thrown and does not unwind, so the libcsdbg user can obtain the <b>exception
+stack trace</b> and print, store or process the trace data any way seem fit.
+
+Libcsdbg <b>transparently loads the symbol tables</b> of the executable and of
+any chosen dynamic shared objects, <b>demangles function symbols</b> to complete
+signatures and binds function names to <b>runtime addresses</b> (even for
+relocatable, position independent, <b>DSO</b> symbols). Libcsdbg can use all the
+well-known objective code file formats (a.out, elf, coff, ecoff e.t.c), works
+with 32 and 64 bit systems and with both big and little endian architectures.
+The library API can easily be used as the base for your own instrumentation
+code. The library exports (through its namespace, <b>csdbg</b>) a <b>rich user
+API</b> to create and process stack traces, to store them to files or send them
+(via <b>ethernet</b> or <b>serial</b> media) to a remote debug workstation, to
+track threads and lookup process symbols, to process command line arguments and
+shell variables that configure the library at runtime and a host of other useful
+utility functions. One of the most useful library tools is the csdbg::plugin
+API. Using the methods exported from this class the user can register multiple
+function profilers (either inline or modular) to be run by libcsdbg. A g++
+shortcoming is that the names of the default instrumentation functions are
+<b>hard-coded</b>, so only a unique implementation of these can exist at linkage
+time, therefore only one profiler can be used at a time. The plugin class is the
+solution to this problem.
+
+<!-- todo Add a small section on filters -->
+
+The library is also equipped with a parser, usable with generic automata (POSIX
+extended regular expressions) and grammars. The default grammar specifies a C++
+stack trace. Using this default parser a trace can be tokenized, processed and
+printed using custom syntax highlighters. The library supports a default stack
+trace <b>syntax highlighter</b> for <b>VT100</b> compatible terminals (XTerm,
+RXVT, GNOME terminal e.t.c) with <b>configurable styles</b>.
+
+The following is a sample exception stack trace (produced by one of the example
+executables that are shipped withing package libcsdbg-extra):
+
+@code
+at thread 0x7f94d9c79740 {
+  at main
+  at csdbg_extra::level1(char const*, unsigned char) (csdbg_step1.cpp:149)
+  at csdbg_extra::level2(char const*, unsigned short) (csdbg_step1.cpp:121)
+  at void csdbg_extra::level3<csdbg::string>(csdbg::string&, unsigned int&) (csdbg_step1.cpp:116)
+  at csdbg_extra::level4(char const*, unsigned long long volatile*, void (*)(double)) (csdbg_step1.cpp:102)
+  at csdbg_extra::dso_main(char const*) (csdbg_step1.cpp:89)
+  at csdbg_extra::dso_inner(char const*) (libcsdbg_test.cpp:53)
+}
+@endcode
+<!----------------------------------------------------------------------------->
+
+
+@subsection sec1_2 Features
+
+This is a comprehensive, albeit not complete, list of libcsdbg features:
+
+<ul>
+<li>Create sophisticated exception stack traces (with addr2line support)
+<li>Works with multi-thread processes and with multi-process programs
+<li>Create detailed <b>POSIX thread</b> stack traces (with addr2line support)
+<li>Full support for <b>Position Independent Code (PIC)</b> (for DSO)
+<li>Works with <b>generic throwables and user defined exception types</b>
+<li>Support for most of the objective code formats (elf, a.out, ecoff e.t.c)
+<li>Support for both <b>32 and 64 bit</b> systems
+<li>Support for both <b>big and little endian CPUs</b>
+<li>Compiled/tested for x86, x86_64, ARM, AVR32, Leon
+</ul>
+
+Project libcsdbg exports an extended, well documented and reusable <b>library
+API</b> to provide:
+
+<ul>
+<li>Easy and minimal code interface, transparent library integration
+<li>Easy library <b>runtime configuration</b>
+<li>Transparent but configurable loading of symbol tables of any executable, DSO or other module
+<li>Instrumentation algorithms that only add <b>minimal overhead</b> and minimal <b>memory footprint</b>
+<li>The high level API provides <b>thread safety</b>
+<li>Smart API to output trace or generic data to files, network peers and serial
+		lines, using <a href="#subsection.1.5.4"><b>LDP (Libcsdbg Debug
+		Protocol)</b></a> and minimal code
+<li>An evergrowing API to support <b>multiple output interfaces</b> through
+		<b>different media</b> (ethernet, serial, UNIX domain sockets, pipes, e.t.c)
+<li>Support for multiple function profilers either inline or loaded from a <b>DSO module (plugin)</b>
+<li>Support for complex runtime module/symbol filtering
+<li>Stack trace <b>syntax highlighting</b> for <b>VT100</b> console output
+<li>Custom dictionaries and grammars for the syntax highlighters
+<li>Custom <b>VT100</b> configurable <b>styles</b>
+<li>Complete documentation including the library API and its use manual
+<li>Library API can be used as the base for custom instrumentation code
+</ul>
+
+Libcsdbg is currently available for <b>GNU/Linux/uClibc</b> platforms. There is
+development going on to provide a version for <b>Windows</b> (32 and 64 bit)
+systems (through <a href="http://www.mingw.org/"><b>MinGW</b></a>) and Unix,
+<b>FreeBSD/OpenBSD/NetBSD</b> systems along with an <b>GNU autotools</b>-based
+build system and plugins for various <b>IDE</b> (Eclipse, Code::Blocks, e.t.c).
+
+Project <a href="http://freecode.com/projects/jTracer/"><b>jTracer</b></a> is a
+libcsdbg sister project, a portable
+<a href="#subsection.1.5.4"><b>LDP</b></a> server implemented with
+Java. Each application that uses the libcsdbg LDP API can implement a jTracer
+client. This can be essential for <b>cross-platform</b> development with
+<b>embedded</b> devices and <b>development boards</b>. Most often target
+platforms such as these don't have a screen or other resources to visualize
+output and data collection during the development and debugging cycles is
+controlled at a workstation through ethernet or serial ports. Instead of
+cluttering the IDE, console or debugger with trace data, LDP is designed to
+isolate these generated data, collect them with jTracer (<b>even from multiple
+target hosts with diverse architectures</b>) and provide an easy way to navigate
+through them.
+<!----------------------------------------------------------------------------->
+
+
+@subsection sec1_3 Licence and details
+
+Libcsdbg is currently published as an Open Source project, licenced under the
+<a href="http://www.gnu.org/licenses/lgpl.html"><b>GNU Library or Lesser General
+Public License version 3.0 (LGPLv3)</b></a>.
+<a href="mailto:tasos42@users.sourceforge.net"><b>Tasos Parisinos</b></a>
+develops and maintains libcsdbg and the project documentation, while
+<a href="mailto:kalamara@users.sourceforge.net"><b>Antonis Kalamaras</b></a>
+develops and maintains the build system. Version numbering uses three numbers,
+major, minor and subminor. <b>The current library version is 1.28</b>. Major
+library updates are related with multiple feature addition, significant changes
+in the library interface, major bug fixes or overall optimization. Minor library
+updates usually add minor features (or major features that were <i>almost</i>
+ready to be included in the major release, but didn't), minor bug fixes, typos
+and documentation updates or entities that need to be tested to gather feedback.
+Subminor releases are stable beta snapshots of the current code development
+status, with the last additions since the last minor update.
+
+The following are locations essential to the development of libcsdbg:
+
+<!-- todo Add tracecat links and details -->
+<ul>
+<li><a href="http://libcsdbg.sourceforge.net/"><b>Homepage</b></a>
+<li><a href="http://sourceforge.net/projects/libcsdbg/"><b>libcsdbg@@sourceforge</b></a>
+<li><a href="http://freecode.com/projects/libcsdbg/"><b>libcsdbg@@freecode</b></a>
+<li><a href="http://sourceforge.net/projects/libcsdbg/files/"><b>Downloads</b></a>
+<li><a href="http://sourceforge.net/p/libcsdbg/discussion"><b>Forum</b></a>
+<li><a href="http://sourceforge.net/p/libcsdbg/tickets"><b>Support</b></a>
+<li><a href="http://libcsdbg.sourceforge.net/jTracer/"><b>jTracer homepage</b></a>
+<li><a href="http://freecode.com/projects/jtracer/"><b>jTracer@@freecode</b></a>
+</ul>
+<!----------------------------------------------------------------------------->
+
+
+@subsection sec1_4 Typographic conventions
+
+This is a placeholder for a table with typographic conventions used throughout
+this document
+<!----------------------------------------------------------------------------->
+
+
+@section sec2 Obtaining the sources
+<hr>
+
+The latest version of libcsdbg is 1.28 (release date April 20th 2014).
+
+This edition of libcsdbg brings a major feature, the instrumentation filters. By
+using such filters you can easily ommit namespaces, classes, single methods or
+entire modules from stack tracing (or other profiling), using POSIX extended
+regular expressions.
+
+The latest <b>source</b> distribution is
+<a href="http://sourceforge.net/projects/libcsdbg/files/latest/download"><b>libcsdbg-1.28.tar.bz2</b></a>
+
+Alternatively, if you've already got the previous version (1.27) you can patch
+it to upgrade it to the latest release:
+
+<ul>
+<li><a href="http://sourceforge.net/projects/libcsdbg/files/1.27/libcsdbg-1.27.tar.bz2"><b>libcsdbg-1.27.tar.bz2</b></a>
+<li><a href="http://sourceforge.net/projects/libcsdbg/files/1.27/ugrade-1.28.patch"><b>upgrade-1.28.patch</b></a>
+</ul>
+
+If you have both these files in the same directory, to apply the patch, execute:
+
+@verbatim
+tar -xjpf libcsdbg-1.27.tar.bz2
+cd libcsdbg-1.27
+patch -p1 < ../upgrade-1.28.patch
+@endverbatim
+
+The project <b>documentation</b> can be recreated (with
+<a href="http://www.doxygen.org/"><b>doxygen</b></a>) in the source code
+distributions. The doxygen version used to produce the documentation for this
+version is <b>1.8.5</b>. It can also be separately downloaded in <b>HTML</b> or
+as a single <b>hyperlinked PDF</b> document (for the user manual):
+
+<ul>
+<li><a href="http://sourceforge.net/projects/libcsdbg/files/1.28/api-ref-libcsdbg-1.28.tar.bz2"><b>api-ref-libcsdbg-1.28.tar.bz2</b></a>
+<li><a href="http://sourceforge.net/projects/libcsdbg/files/1.28/user-manual-libcsdbg-1.28.pdf"><b>user-manual-libcsdbg-1.28.pdf</b></a>
+</ul>
+
+Project code examples, tutorials, example DSO and instrumentation plugin modules
+have moved to a new package
+<a href="http://sourceforge.net/projects/libcsdbg/files/libcsdbg-extra/libcsdbg-extra-1.28.tar.bz2"><b>libcsdbg-extra-1.28.tar.bz2</b></a>
+
+Finally, if you want an overview of <b>all</b> project files check the libcsdbg
+<a href="http://sourceforge.net/projects/libcsdbg/files/"><b>repository</b></a>
+at sourceforge.net. Click on any file's info icon and obtain its <b>SHA1</b> or
+<b>MD5</b> checksum to verify the file you've downloaded.
+
+@note
+After you download any project file, remember to subscribe/follow libcsdbg in
+order to receive notification about new releases, updates, news, announcements
+and other libcsdbg related material in your mailbox. The easiest way to do so is
+to visit the <a href="http://freecode.com/projects/libcsdbg/"><b>libcsdbg
+project page at freecode.com</b></a> and click on <i>'follow'</i>
+<!----------------------------------------------------------------------------->
+
+
+@section sec3 Installation
+<hr>
+@subsection sec3_1 Compile the sources (Unix/Linux)
+
+If you downloaded the source distribution, you need at least the following to
+build the library, the example executables and the project documentation:
+
+<ul>
+<li><a href="http://gcc.gnu.org/"><b>GNU g++</b></a>
+<li><a href="http://www.gnu.org/software/make/"><b>GNU make</b></a>
+<li><a href="http://www.gnu.org/software/binutils/"><b>GNU binutils</b></a> (at least libbfd.so, strip and addr2line)
+<li>UNIX standard tools such as rm, echo, touch, mkdir, cd, cp, ln, mv, grep, id, tar, ldconfig, sudo e.t.c
+<li>You will need <a href="http://www.doxygen.org/"><b>doxygen</b></a> and
+		<a href="http://www.graphviz.org/"><b>graphviz</b></a>, to recreate the
+		project documentation (doxygen-1.8.5)
+</ul>
+
+Unpack the archive, unless you already have done that. If you want to recreate
+the documentation you must unpack the tarball in <b>/devel</b> (or change the
+paths in the doxygen configuration files (doc/docgen_html and doc/docgen_tex)
+with a simple text editor or <b>doxywizard</b>:
+
+@verbatim
+mkdir -p /devel
+mv libcsdbg-1.28.tar.bz2 /devel
+cd /devel
+tar -xjpf libcsdbg-1.28.tar.bz2
+@endverbatim
+
+Then compile and install it:
+
+@verbatim
+cd libcsdbg-1.28
+sudo sh ./build
+@endverbatim
+
+If you install as a simple user (not root) use of <b>sudo</b> is essential if
+you want to keep the default prefix (<b>/usr/local</b>). Installing in another
+prefix may not need root privilege, but the dynamic loader configuration file
+(<b>ld.so.conf</b>) will not be updated if sudo is not used.
+
+Currently <b>GNU autotools</b> are not supported but this is under development.
+The <i>build</i> script should compile without problems and install libcsdbg
+library, headers and other project files with <b>/usr/local</b> as the prefix.
+For an overview of all <i>build</i> script options and modes of operation use:
+
+@verbatim
+sh ./build -h
+@endverbatim
+
+@verbatim
+Project libcsdbg installer
+Usage: build [-c] [-u] [-m] [-s] [-d] [-h]
+
+'build' will compile and install its target by default.
+The following options change the default behaviour:
+
+-c  Clear the source tree (make clean)
+-u  Uninstall the package (make uninstall)
+-m  Compile but don't install
+-s  Don't parallelize compilation on multicore systems
+-d  Create/update the documentation (make doc)
+-h  Show this message
+@endverbatim
+
+Although the <i>build</i> script can do all that you may need, to compile and
+install or uninstall, recreate the documentation or clear the source tree by
+calling the equivalent <i>Makefile</i> targets (in the <b>right</b> order), it
+is essential to describe these individual targets.
+
+First of all clear the source tree from built binaries:
+
+@verbatim
+make clean
+@endverbatim
+
+Compile the sources (the result binaries are stored in <b>./.build</b>):
+
+@verbatim
+make
+@endverbatim
+
+Install the library, header files, miscellaneous resource files (stack trace
+syntax highlighter dictionaries, utility scripts e.t.c) and pkg-config file
+(under <b>/usr/local</b> by default):
+
+@verbatim
+make install
+@endverbatim
+
+Optionally generate the documentation. This will create the <b>API reference</b>
+in <b>HTML</b> and the user manual in <b>LaTex</b> and in <b>hyperlinked PDF</b>
+(all generated under <b>./doc</b>). To generate the PDF version of the manual
+you will need a running distribution of <b>LaTex</b> and <b>pdflatex</b>,
+<b>makeindex</b> and <b>egrep</b>. To see the HTML documentation, just point a
+browser to <i>index.html</i> in the <b>./doc/api-ref-libcsdbg-1.28</b> folder.
+The PDF manual <i>refman.pdf</i> will be located in the user manual directory of
+the distribution (<b>./doc/user-manual-libcsdbg-1.28</b>). Just view and print
+it via the acrobat reader.
+
+@verbatim
+make doc
+@endverbatim
+
+Finally, if you need to uninstall all libcsdbg-related files from your system:
+
+@verbatim
+make uninstall
+@endverbatim
+
+To clear the source directory from built binaries <b>and</b> all the compiled
+documentation files (this target is not called from <i>build</i>):
+
+@verbatim
+make distclean
+@endverbatim
+
+As said earlier, no <b>autotools</b> support exists for the project but this is
+under way. So, currently all you can do is edit <i>Makefile</i> to change some
+options that may give you a headache. The <i>Makefile</i> options you may want
+to alter are:
+
+<b>$PREFIX</b><br>
+Where to install libcsdbg (copy changes to include/config.hpp)
+
+<b>$PLATFORM</b><br>
+The target prefix you need to cross compile the package (for example
+<i>mips-linux-</i>). It is used as the prefix for various binaries in the
+toolchain
+
+<b>$IPATHS</b><br>
+Additional paths to search for header files
+
+<b>$DOPTS</b><br>
+Define various preprocessor macros such as debug or release mode, optimizations,
+include or discard modules e.t.c
+
+<b>$GOPTS</b><br>
+Various g++ options such as target machine architecture, C++ standard used
+throughout compilation e.t.c
+
+The <i>Makefile</i> <b>$DOPTS</b> variable defines the main build configuration.
+Through this variable you can define which modules you want to include in the
+library and which features to support. The directives in <b>$DOPTS</b> are
+formatted as CSDBG_WITH_feature to add support for a module or feature, or
+CSDBG_WITHOUT_feature to exclude it:
+
+<b>_REENTRANT</b><br>
+Support thread safety
+
+<b>CSDBG_WITH_DEBUG</b><br>
+Include debugging code
+
+<b>CSDBG_WITH_COLOR_TERM</b><br>
+Include support for color terminals (for debug text only). This coloring of
+debug messages makes it easy to discriminate between the different debug levels
+
+<b>CSDBG_WITH_STREAMBUF</b><br>
+Include code for buffered output streams
+
+<b>CSDBG_WITH_STREAMBUF_FILE</b><br>
+Include code for buffered file output streams (this is valid only if the
+CSDBG_WITH_STREAMBUF directive is also defined)
+
+<b>CSDBG_WITH_STREAMBUF_TCP</b><br>
+Include code for buffered TCP/IP socket output streams (this is valid only if
+the CSDBG_WITH_STREAMBUF directive is also defined)
+
+<b>CSDBG_WITH_STREAMBUF_STTY</b><br>
+Include code for buffered serial tty output streams (this is valid only if the
+CSDBG_WITH_STREAMBUF directive is also defined)
+
+<b>CSDBG_WITH_PLUGIN</b><br>
+Include code for instrumentation plugins
+
+<b>CSDBG_WITH_HIGHLIGHT</b><br>
+Include code for trace C++ syntax highlighting
+
+<b>CSDBG_WITH_FILTER</b><br>
+Include code for module/symbol instrumentation filters
+
+The complete library, with all its features enabled has a memory footprint of
+approximately 279Kb. The complete release library is marginally smaller (251Kb).
+If you keep only the core library functions and exclude all advanced features
+(buffered output streams, instrumentation plugins, trace syntax highlighter) the
+release library shrinks down to ~115Kb.
+<!----------------------------------------------------------------------------->
+
+
+@section sec4 Troubleshooting
+<hr>
+@subsection sec4_1 Bug reports
+
+Bugs are tracked in the
+<a href="http://sourceforge.net/p/libcsdbg/tickets"><b>tickets</b></a> section
+of the libcsdbg site at <b>sourceforge.net</b>. Before submitting a new bug,
+first search through <b>all</b> the tickets (open and closed), if the same bug
+has already been submitted by others. If you are unsure whether or not something
+is a bug, you may ask help on the
+<a href="http://sourceforge.net/p/libcsdbg/discussion"><b>users forums</b></a>
+first (subscription is <b>not</b> required, the forums are moderated).
+
+So, you think you found a bug? You should report it either on the user forums or
+by sending an email to the project admin
+<a href="mailto:tasos42@users.sourceforge.net"><b>tasos42@@users.sourceforge.net</b></a>.
+
+If you send only a (vague) description of a bug you are usually not very helpful
+and it will cost much more time to figure out what you mean. In the worst-case,
+your bug report may even be completely ignored, so always try to include the
+following information in your bug report:
+
+<ul>
+<li>The version of libcsdbg you are using (use <i>pkg-config --modversion
+		libcsdbg</i> if you are not sure)
+<li>The name and version number of your operating system (<i>uname -a</i>)
+<li>The libcsdbg-related shell and CLI variables
+<li>All libcsdbg output (to the console, files, network) that is specific to the
+		problematic scenario
+</ul>
+
+The easiest way for us to fix bugs is if you can attach a small example that
+demonstrates the problem you have to the bug report, so we can reproduce it on
+our machines. Please make sure the example is valid source code and that the
+problem is really captured by the example. If you intend to send more than one
+file please zip or tar the files together into a single file for easier
+processing.
+
+You can (and are encouraged to) add a patch for a bug. If you do so please use
+<b>PATCH</b> as a keyword in the bug entry form or in the email subject. If you
+have ideas how to fix existing bugs and limitations please discuss them on the
+<a href="http://sourceforge.net/p/libcsdbg/discussion"><b>users forums</b></a>.
+For patches please use <i>diff -uprN</i> or include the files you modified.
+<!----------------------------------------------------------------------------->
+
+
+@subsection sec4_2 How to contribute
+
+<b>Donate time</b><br><br>
+
+You can contribute your time by helping with programming, testing and filing bug
+reports, improving documentation, translations or by answering questions on the
+mailing list. We always welcome users whose only contribution is simply using
+libcsdbg, giving us feedback on how to improve it and telling others about it.
+Thank you for supporting libcsdbg.
+
+<b>Donate money</b><br><br>
+
+If you don't have time to help but do find libcsdbg useful, then please consider
+making a financial donation. This will help to pay the bills and motivate us to
+continue working on libcsdbg. You can do so using the Paypal account indicated
+on the project site at sourceforge.net, or contact us for other payment methods.
+<!----------------------------------------------------------------------------->
+
+
+@section sec5 Usage
+<hr>
+@subsection sec5_1 Compiling with libcsdbg support
+
+Integration with libcsdbg is transparent and simple, just compile your code with
+some g++ mandatory flags and link with libcsdbg (-lcsdbg). From these g++ flags
+the most prominent are <i>-finstrument-functions</i> and <i>-g[format]</i>. You
+may need to invoke:
+
+@verbatim
+pkg-config --cflags libcsdbg
+@endverbatim
+
+@verbatim
+-fPIC
+-g
+-finstrument-functions
+-finstrument-functions-exclude-file-list=/usr/include
+-finstrument-functions-exclude-file-list=iostream
+-finstrument-functions-exclude-file-list=ios
+-finstrument-functions-exclude-file-list=istream
+-finstrument-functions-exclude-file-list=ostream
+-finstrument-functions-exclude-file-list=/usr/local/include/csdbg
+-I/usr/local/include
+@endverbatim
+
+to see <b>all</b> the additional flags you must pass to the compiler. Similarly:
+
+@verbatim
+pkg-config --libs libcsdbg
+@endverbatim
+
+@verbatim
+-L/usr/local/lib
+-lcsdbg
+-ldl
+-lbfd
+-lpthread
+@endverbatim
+
+will print the flags you must pass to the linker. You may need to add
+<b>$PREFIX/lib/pkgconfig</b> to your pkg-config path.
+
+Stack traces created with libcsdbg can only contain calls to functions that are
+instrumented by libcsdbg. For example if you write code for an application and
+instrument that code with libcsdbg only these functions you instrument will
+appear in traces. If you link your application with third-party DSO, the DSO
+function calls will not appear in the trace by default! You need to recompile
+those DSO to add libcsdbg support. As a rule of thumb, you should recompile code
+to add support for libcsdbg <b>if that code throws exceptions</b> and if it is
+essential to you to see how those exceptions propagated inside the module call
+graph.
+
+Even if you don't call a single API method, if libcsdbg is compiled with debug
+support, it is easy to see if everything linked properly by just running your
+application: libcsdbg will at least attempt to load its symbol table and it will
+print various debug messages
+<!----------------------------------------------------------------------------->
+
+
+@subsection sec5_2 Configuring libcsdbg at runtime
+
+Before you run a program linked with libcsdbg there are some things you may want
+to configure, apart from the dynamic linker path, to help libcsdbg decide what
+to load and what to ignore, as well as some other runtime configuration tokens.
+
+The symbol table of the program is always loaded by libcsdbg. The user can
+select which DSO symbol tables to load and which to discard by declaring the
+<b>$CSDBG_LIBS</b> shell variable as a ':' delimited list of POSIX extended
+regular expressions. The absolute path of each DSO is matched against each
+regexp. If one matches then the symbol table of the DSO is loaded to the
+libcsdbg namespace and the DSO functions are instrumented throughout execution.
+If <b>$CSDBG_LIBS</b> is not set, all linked DSO symbol tables will be loaded.
+If it is set with a void value, all DSO are filtered out from instrumentation.
+You should only load DSO that are compiled with libcsdbg support. Loading non
+instrumented DSO is not a problem, apart from additional overhead. For example
+to run the example programs (in libcsdbg-extra) you must execute something like:
+
+@verbatim
+export CSDBG_LIBS=csdbg_test
+@endverbatim
+
+Generally, to get the value of such shell variables, parsed to their components,
+you need to use the csdbg::util::getenv method instead of the equivalent
+<b>libc</b> function.
+
+Libcsdbg can also accept command line arguments. To avoid conflicts with the
+application and its command line arguments, the ones for libcsdbg are prefixed
+with <b>--csdbg-</b>. To feed those arguments to libcsdbg you must call, early
+in your code the csdbg::util::init method. This method parses the command line
+argument vector, identifies the arguments for libcsdbg, canonicalizes (removes
+the --csdbg- prefix), stores them internally and removes them from the vector,
+so the application never knows they were there. These arguments may just be
+flags or pass values to the library. Currently no such argument is utilized and
+the mechanism is there only for the users to use, but in the future the runtime
+configuration of libcsdbg will be affected by them and/or a configuration file.
+
+If you plan to develop and use any instrumentation plugin DSO modules, the best
+practice is to store them in <b>$PREFIX/lib/modules/libcsdbg</b>. At runtime,
+for the dynamic linker to be able to locate them you must add this path to the
+linker search path either by editing <b>ld.so.conf</b> or by adding the path to
+the <b>$LD_LIBRARY_PATH</b> shell variable. The examples and tutorials that
+demonstrate the plugin API work in exactly this way.
+<!----------------------------------------------------------------------------->
+
+
+@subsection sec5_3 Using the csdbg::tracer API
+
+To be able to do anything with libcsdbg, even when you use its higher level
+objects (csdbg::filebuf, csdbg::tcpsockbuf e.t.c) you first need to obtain a
+csdbg::tracer object. The word is obtain, not create, because the class
+constructors, destructor and assignment operator are not public. The class
+itself provides you with interfacing tracer objects. You must call the
+csdbg::tracer::interface static method, as seen in the following snippet, to
+obtain a pointer to an interfacing tracer object.
+
+@code
+using namespace csdbg;
+
+tracer *iface = tracer::interface();
+if ( unlikely(iface == NULL) )
+	; // abort
+@endcode
+
+If this call returns NULL, that means that library initialization failed to load
+at least one symbol table. You should check the debug and generic output to see
+why this occured. For example this can happen if all modules and the executable
+itself are stripped of symbols! You don't need to release or otherwise clear the
+obtained interface object after you are done. The library will take care of it
+internally.
+
+Read the code and comments in libcsdbg-extra package examples and documentation.
+This will help you understand how to use libcsdbg, how to interface with it with
+code and use its facilities. The interface is really very simple and usually it
+takes <b>one or two lines of code to produce a trace!</b>
+
+As you delve into the libcsdbg API, to use it for more complicated stack trace
+processing you should keep two rules of thumb in mind. The first is that each
+method return value marked as <b>heap allocated</b> in the documentation, is a
+notice to free (delete) the memory allocated, to avoid creating memory leaks.
+The second is to check the <b>graph legend</b>, to help understand the various
+UML graphs that document the various API classes, relations and features.
+<!----------------------------------------------------------------------------->
+
+
+@subsubsection sec5_3_1 Exception stack traces
+
+The best place to create and output (or process) an exception stack trace is in
+the <b>catch</b> section that is handling it. There are two ways to output such
+a trace. The first is to feed the tracer object to an STL output stream, using
+the insertion operator, for example:
+
+@code
+using namespace csdbg;
+
+tracer *iface = tracer::interface();
+if ( unlikely(iface == NULL) )
+	return;
+
+try {
+	...
+}
+
+catch (exception &x) {
+	std::cout << x << "\r\n" << *iface << "\r\n";
+}
+
+iface->unwind();
+@endcode
+
+This is the simplest way possible! Although inside the tracer object lots of
+things are happening behind the scenes, things that can throw exceptions, you
+don't need to worry, they are taken care of internally. Moreover the output to
+an STL stream is <b>atomic</b> in the scope of the library (no other library
+output method will interleave). The other way to get the stack trace of the
+currently handled exception is to call the interface tracer object to store it
+in a csdbg::string buffer, as in the following example:
+
+@code
+using namespace csdbg;
+
+tracer *iface = tracer::interface();
+if ( unlikely(iface == NULL) )
+	return;
+
+try {
+	...
+}
+
+catch (exception &x) {
+	try {
+		string buf;
+		iface->trace(buf);
+	}
+
+	catch (...) {
+	}
+}
+
+iface->unwind();
+@endcode
+
+As you see in this last example, creating a stack trace in this way may throw
+exceptions that are the caller's responsibility to handle. The call to
+csdbg::tracer::unwind is only <b>mandatory</b> when the exception stack trace is
+ignored (in order to dispose that stored trace). If you don't properly unwind
+the simulated stack, the stored trace will mess with the next attempt to obtain
+a stack trace. Nevertheless, if the trace was actually created, a call to unwind
+doesn't affect the tracer object state at all (nothing to dispose), so it is not
+an error to call it once or even more times even when the trace was produced.
+Mind you, all calls to csdbg::tracer::trace even from the <i>std::ostream</i>
+insertion operator <b>unwind</b> the stack on their own, even if they fail to
+produce a trace due to some error.
+
+A final point is, if you code a function to do the trace creation and output,
+this function must not be instrumented, otherwise it will corrupt the exception
+stack trace. Here's an example:
+
+@code
+using namespace csdbg;
+
+void foo(exception&) __attribute((no_instrument_function));
+
+void foo(exception &x)
+{
+	tracer *iface = tracer::interface();
+	if ( unlikely(iface == NULL) )
+		return;
+
+	try {
+		string buf;
+		iface->trace(buf);
+	}
+
+	catch (...) {
+	}
+}
+
+...
+
+try {
+	...
+}
+
+catch (exception &x) {
+	foo(x);
+}
+
+iface->unwind();
+@endcode
+
+Due to C++ polymorfism <b>all csdbg::string subclasses</b> (the buffered output
+stream types of the library, and the stack trace parser/highlighter) work in the
+same way!
+<!----------------------------------------------------------------------------->
+
+
+@subsubsection sec5_3_2 Thread stack traces
+
+You can create a thread stack trace anywhere in your code, at any moment of
+execution. You can create a stack trace for the currently running thread or for
+any process thread, running, stopped, resumed or blocked with a call at the two
+argument variant of csdbg::tracer::trace as in the next example:
+
+@code
+using namespace csdbg;
+
+tracer *iface = tracer::interface();
+if ( unlikely(iface == NULL) )
+	return;
+
+string buf;
+iface->trace(buf, pthread_self());
+@endcode
+
+In case you have stored the thread ID or name of any thread, you then can obtain
+its stack trace from any other thread. Although the libcdbg higher lever library
+calls are thread safe, you should be vigilant for data races that <b>you</b> may
+create. Another consideration, is that the above code may throw exceptions, that
+of course you need to handle somewhere. Libcsdbg maintains a list of simulated
+threads in a csdbg::process object obtained with csdbg::tracer::proc. There are
+four methods to obtain the csdbg::thread object pointer for a thread (all thread
+safe):
+
+<ul>
+<li><b>csdbg::process::current_thread</b> - Get the current thread descriptor
+<li><b>csdbg::process::get_thread(pthread_t)</b> - Get the thread descriptor for a specific ID
+<li><b>csdbg::process::get_thread(const i8*)</b> - Get the thread descriptor for a specific
+		name. Threads are anonymous by default, libcsdbg adds a name attribute to
+		thread handlers for easy identification. You may set or retreive a thread's
+		name using csdbg::thread::set_name and csdbg::thread::name methods respectively
+<li><b>csdbg::process::get_thread(u32)</b> - Get the thread descriptor at an offset in the thread enumerator
+</ul>
+
+This is an example of creating a stack trace for the third thread in the list:
+
+@code
+using namespace csdbg;
+
+tracer *iface = tracer::interface();
+if ( unlikely(iface == NULL) )
+	return;
+
+thread *thr = iface->proc()->get_thread(2);
+string buf;
+iface->trace(buf, thr->handle());
+@endcode
+
+Another version of thread stack tracing is to create a batch trace for all the
+threads within a process. This feature is delivered by calling the method
+csdbg::tracer::dump. This can prove <b>extremely</b> helpful when you want to
+debug an application that has totally crashed or deadlocked. Instead of loading
+and debugging the <b>core dump</b> (<b>if</b> the OS supports this!) you can
+solve the problem quicker by taking a look at the thread stack traces, to see
+what each was doing (and what the then executing thread was doing) before the
+program crashed. Here's an example scenario:
+
+<ol>
+<li>The application setups and registers a handler for the <b>SIGSEGV</b> signal
+<li>A thread execution creates a <b>memory access violation</b>
+<li>The process receives a SIGSEGV because of the segmentation fault
+<li>The registered handler creates a stack trace dump for all the threads and
+		stores it in a file using a csdbg::filebuf object
+<li>The process aborts
+</ol>
+
+There are additional methods in the csdbg::process public API, they are designed
+to be called by the instrumentation functions (these functions are not part of
+the <b>csdbg</b> namespace, so they too need to obtain a tracer interface and
+use its public methods). These methods are used for thread management and symbol
+lookup and they <b>may</b> be called by the library user. One of them,
+csdbg::process::cleanup_thread is specifically for the library user. This method
+should be called from <b>thread cancellation handlers</b> to release resources.
+If you don't cleanup the thread descriptor, though it becomes useless when the
+actual thread has exited, it continues to occupy memory and will also inject
+junk, empty traces in dumps or in explicit trace requests. This method may also
+be called just before a thread exits. If you don't call cleanup_thread, it is
+not a bug, it's just poor coding. When you have called this method you should
+call no more methods for the deleted thread ID. Again, this will be handled by
+the library, but again, it is poor coding.
+<!----------------------------------------------------------------------------->
+
+
+@subsection sec5_4 The Libcsdbg Debug Protocol (LDP)
+
+Ok, you have created some traces and learned how to output them to a console or
+store them in buffers. <b>LDP (Libcsdbg Debug Protocol)</b> is an application
+level protocol designed to transmit trace data, together with other, process,
+thread and exception descriptive data, through any media and transport layer
+protocol (<b>TCP/IP</b>, <b>UDP/IP</b> e.t.c). LDP is a <b>unidirectional</b>,
+<b>client-server</b> protocol. Unidirectional because only the client sends
+(trace) data to the server, the server need not aknowledge or reply in any way.
+The only role that the server plays in LDP, is to collect these data from
+multiple (and possibly of variant architecture and OS) client peers and store
+them or let a user collectively navigate through them and process them. LDP is
+designed as a message oriented protocol (like <b>HTTP</b>). A single connection,
+kept alive, can be used to send multiple messages but this is not mandatory, it
+is up to the implementation. Nevertheless, two LDP messages are not connected in
+any way and can be thought as two separate LDP sessions. This is a pseudo-BNF
+description of a message:
+
+<ul>
+<li>The message consists of a <b>head</b> and a <b>body</b> separated by an empty line (<b>\\r\\n</b>)
+<li>The <b>head</b> consists of a number of <b>headers</b>
+<li>Each <b>header</b> is formatted as '<b>key</b>: <i>value</i>\\r\\n'
+<li>Header numeric values are <b>hexadecimal</b> (no 0x prefix)
+<li>The message <b>body</b> is the whole trace
+<li>The message is terminated by an empty line
+</ul>
+
+This is the generic layout:
+
+@verbatim
+key1: value1\r\n
+key2: value2\r\n
+...
+keyN: valueN\r\n
+\r\n
+trace data\r\n
+\r\n
+@endverbatim
+
+The mandatory protocol headers are for:
+
+<ul>
+<li>executable absolute path
+<li>process ID
+<li>thread ID
+<li>timestamp (in microseconds)
+</ul>
+
+The non mandatory protocol headers are for:
+
+<ul>
+<li>exception data
+<li>other, user and OEM headers
+</ul>
+
+The following is an LDP message created by one of the example executables in
+package libcsdbg-extra:
+
+@code
+path: /usr/local/bin/csdbg_step6
+pid: 3b3
+tid: 7f9870ca8700
+tstamp: 4f264e66740f9
+
+at child_1 thread (0x7f9870ca8700) {
+  at csdbg_extra::pthread_main(void*)
+  at csdbg_extra::level1(char const*, unsigned char) (csdbg_step6.cpp:205)
+  at csdbg_extra::level2(char const*, unsigned short) (csdbg_step6.cpp:187)
+  at void csdbg_extra::level3<csdbg::string>(csdbg::string&, unsigned int&) (csdbg_step6.cpp:182)
+  at csdbg_extra::level4(char const*, unsigned long long volatile*, void (*)(double)) (csdbg_step6.cpp:169)
+}
+@endcode
+
+Project <a href="http://freecode.com/projects/jTracer/"><b>jTracer</b></a> is a
+libcsdbg sister project, a portable LDP server implemented with Java. Each
+application that uses the libcsdbg LDP API can implement a jTracer client. This
+can be essential for <b>cross-platform</b> development with <b>embedded</b>
+devices and <b>development boards</b>. Most often target platforms such as these
+don't have a screen or other resources to visualize output and data collection
+during the development and debugging cycles is controlled at a workstation
+through ethernet or serial ports. Instead of cluttering the IDE, console or
+debugger with trace data, LDP is designed to isolate these generated data,
+collect them with jTracer (<b>even from multiple target hosts with diverse
+architectures</b>) and provide an easy way to navigate through them.
+
+<!-- todo Add a section for tracecat -->
+<!----------------------------------------------------------------------------->
+
+
+@subsection sec5_5 Buffered output streams
+
+Subclassing the abstract class csdbg::streambuf is the standard way to create
+objects that output traces and other data to various media. A streambuf-derived
+object is both a string buffer (an object of class csdbg::string) and an output
+stream. The media that are supported are those that can be handled with an
+integer descriptor (files, character devices, terminals, sockets, pipes e.t.c).
+The libcsdbg project is currently shipped with three streambuf subclasses,
+csdbg::filebuf is used to output traces to files, csdbg::tcpsockbuf is used to
+transmit traces through a TCP/IP network and csdbg::sttybuf is used to send
+traces to serial devices. Other classes to support UDP/IP and Unix sockets,
+pipes, FIFOs and other will be added in the future or contributed by users.
+Class streambuf apart from providing the common base functionality it also
+implements a part of the <a href="#subsection.1.5.4"><b>Libcsdbg Debug Protocol
+(LDP)</b></a>. These classes aren't thread safe, but class csdbg::streambuf
+implements basic stream locking methods.
+<!----------------------------------------------------------------------------->
+
+
+@subsubsection sec5_5_1 Using csdbg::filebuf
+
+A csdbg::filebuf object is a buffered output stream used to output
+<a href="#subsection.1.5.4"><b>LDP (Libcsdbg Debug Protocol)</b></a> data
+(protocol headers and traces) or generic data to a file. This class is not
+thread safe, the caller must implement thread synchronization. A filebuf object
+inherits all the csdbg::string methods designed for text manipulation (append,
+clear, set e.t.c). You use these methods to process the buffer data, or the
+csdbg::tracer methods to store traces to the buffer. Then, you may open the
+underlaying file stream and flush/clear the buffer. You can re-fill and re-flush
+as many times as you wish before you close the filebuf. Closing is just the
+opposite of open, it doesn't release the object and its buffer, so you may
+re-open it. Based on the unique identifiers of the instrumented process, a
+filebuf object can assign file names in an unambiguous way. The steps to use a
+filebuf object are:
+
+<ol>
+<li>Create a filebuf object for a path
+<li>Open the file
+<li>Append/set text data in the buffer
+<li>Flush the buffer
+<li>Repeat steps 3-4 until completion
+<li>Close
+<li>Repeat steps 2-6 until completion
+<li>Release the object
+</ol>
+
+Step 2 in this list can be inserted anywhere within steps 2-4, you don't need to
+open the file in order to process its buffer, it must be opened before you flush
+the buffer. To name files in an unambiguous way, method
+csdbg::filebuf::unique_id can come in handy. It takes a printf-style format
+string (the default format is <i>%%e_%%p_%%t_%%s</i>) and uses the following
+specifiers:
+
+<ul>
+<li>%%e - executable name
+<li>%%a - executable absolute path
+<li>%%p - process ID
+<li>%%t - thread ID
+<li>%%s - timestamp (in microseconds)
+</ul>
+
+The following is an example of using the filebuf class:
+
+@code
+using namespace csdbg;
+
+tracer *iface = tracer::interface();
+if ( unlikely(iface == NULL) )
+	return;
+
+/* Log a thread stack trace to a file, with a unique, trace describing name */
+string *nm = filebuf::unique_id("%e_%p.trace");
+filebuf fout(nm->cstr());
+
+/* Add a header that describes the trace */
+fout.header();
+fout.append("\r\n");
+iface->trace(fout, pthread_self());
+fout.append("\r\n");
+
+fout.open();
+fout.flush();
+fout.close();
+@endcode
+<!----------------------------------------------------------------------------->
+
+
+@subsubsection sec5_5_2 Using csdbg::tcpsockbuf
+
+A csdbg::tcpsockbuf object is a buffered output stream than can be used to
+implement the client side of <a href="#subsection.1.5.4"><b>LDP (Libcsdbg Debug
+Protocol)</b></a> or a generic <b>TCP/IP client socket</b>. Nevertheless, this
+class is optimized for LDP and generally for <b>unidirectional</b> protocols. If
+you need to implement a <b>bidirectional</b> protocol you must subclass
+tcpsockbuf. This class is not thread safe, the caller must implement thread
+synchronization. A tcpsockbuf object inherits all the csdbg::string methods
+designed for text manipulation (append, clear, set e.t.c). You use these methods
+to process the buffer data, or the csdbg::tracer methods to store traces to the
+buffer. Then, you may connect the socket to its peer and flush/clear the buffer.
+You can re-fill and re-flush as many times as you wish before you close or
+disconnect the tcpsockbuf. Disconnecting (closing) or shutting down the socket
+is just the opposite of open/connect, it doesn't release the object and its
+buffer, so you may re-connect it. The steps to use a tcpsockbuf object are:
+
+<ol>
+<li>Create a tcpsockbuf object for a peer IP address and TCP port
+<li>Connect to the peer
+<li>Append/set text data in the buffer
+<li>Flush the buffer
+<li>Repeat steps 3-4 until completion
+<li>Disconnect
+<li>Repeat steps 2-6 until completion
+<li>Release the object
+</ol>
+
+Step 2 in this list can be inserted anywhere within steps 2-4, you don't need to
+connect the socket in order to process its buffer, it must be connected before
+you flush the buffer. The following is an example of using the tcpsockbuf class:
+
+@code
+using namespace csdbg;
+
+tracer *iface = tracer::interface();
+if ( unlikely(iface == NULL) )
+	return;
+
+tcpsockbuf *client = NULL;
+chain<string> *peer_info = util::getenv("CSDBG_PEER");
+if ( likely(peer_info == NULL) )
+	client = new tcpsockbuf(NULL);
+
+else {
+	i32 port = g_ldp_port;
+	if ( likely(peer_info->size() > 1) )
+		port = atoi(peer_info->at(1)->cstr());
+
+	client = new tcpsockbuf(peer_info->at(0)->cstr(), port);
+}
+
+/* Log a trace to a socket connected to an LDP server at port 4242 */
+client->header();
+client->append("\r\n");
+iface->trace(*client, pthread_self());
+client->append("\r\n");
+
+client->open();
+client->flush();
+client->close();
+@endcode
+<!----------------------------------------------------------------------------->
+
+
+@subsubsection sec5_5_3 Using csdbg::sttybuf
+
+A csdbg::sttybuf object is a buffered output stream used to output
+<a href="#subsection.1.5.4"><b>LDP (Libcsdbg Debug Protocol)</b></a> data
+(protocol headers and traces) or generic data to a serial device (RS-282,
+RS-485, USB or other serial interfaces, terminals, pseudoterminals e.t.c). The
+interfaces are configured for 8N1 transmition, the baud rate is configurable
+(throughout a session). This class is not thread safe, the caller must implement
+thread synchronization. An sttybuf object inherits all the csdbg::string methods
+designed for text manipulation (append, clear, set e.t.c). You use these methods
+to process the buffer data, or the csdbg::tracer methods to store traces to the
+buffer. Then you may open the device node and flush the buffer. You can re-fill
+and re-flush as many times as you wish before you close the sttybuf. Closing is
+just the opposite of open, it doesn't release the object and its buffer, so you
+may re-open it. The steps to use an sttybuf object are:
+
+<ol>
+<li>Create an sttybuf object for a serial port and baud (8N1 configuration)
+<li>Open the device
+<li>Append/set text data in the buffer
+<li>Flush the buffer
+<li>Repeat steps 3-4 until completion
+<li>Close
+<li>Repeat steps 2-6 until completion
+<li>Release the object
+</ol>
+
+Step 2 in this list can be inserted anywhere within steps 2-4, you don't need to
+open the port in order to process its buffer, it must be opened before you flush
+the buffer. The following is an example of using the sttybuf class:
+
+@code
+using namespace csdbg;
+
+tracer *iface = tracer::interface();
+if ( unlikely(iface == NULL) )
+	return;
+
+sttybuf tty("/dev/ttyS0", 115200);
+tty.header();
+tty.append("\r\n");
+iface->trace(tty, pthread_self());
+tty.append("\r\n");
+
+tty.open();
+tty.flush();
+tty.close();
+@endcode
+<!----------------------------------------------------------------------------->
+
+
+@subsection sec5_6 Using the instrumentation plugin API
+
+A <b>plugin</b> object is the way to declare a pair of instrumentation functions
+and register them with libcsdbg to be run upon function call and return. A
+plugin can be created by passing it the addresses of the instrumentation
+functions (<b>inline plugin</b>) or by loading a plugin <b>DSO</b> module that
+implements and exports these two functions. A plugin invokes the system dynamic
+linker (<b>ld</b>) to find, load and link the module, so it must reside in one
+of the linker search directories (see <b>ld.so.conf</b> and the linker manual to
+understand its path search algorithm).
+
+The names of the default profiling functions (<b>__cyg_profile_func_enter</b>
+and <b>__cyg_profile_func_exit</b>) are <b>hard-coded into g++</b>, so only a
+unique implementation of these can exist at linkage time, therefore only one
+profiler can be used at a time. For example, if a user needed to use libcsdbg
+he/she could not use any other function profilers at the same time. The plugin
+class is the fix to this g++ shortcoming. Now you can use libcsdbg and let the
+library run the secondary profilers by registering to it the proper plugins.
+
+The plugin class supports both <b>C and C++ ABIs</b>. To resolve C++ functions
+the user must pass the symbol name and its full scope (as a separate argument in
+the form namespace::class). To resolve C functions omit the scope argument
+altogether. The module callback functions must be named <b>mod_enter</b> and
+<b>mod_exit</b>, take two <b>void*</b> arguments and return <b>void</b> for the
+plugin object to resolve them correctly. All plugin functions (as all libcsdbg
+functions) must <b>NOT</b> be instrumented by libcsdbg, as this will result in
+an infinite recurse and a stack overflow.
+
+You don't really need to instantiate plugin objects yourself. Just use the
+plugin API exported by csdbg::tracer to register or unregister plugins, like in
+the following code example:
+
+@code
+using namespace csdbg;
+
+void init() __attribute((constructor, no_instrument_function));
+
+void init()
+{
+	tracer *iface = tracer::interface();
+	if ( unlikely(iface == NULL) )
+		return;
+
+	try {
+		string path("path/to/module/plugin.so");
+		iface->add_plugin(path.cstr(), "outer::inner::class");
+	}
+
+	catch (exception &x) {
+		std::cerr << x;
+	}
+
+	catch (std::exception &x) {
+		std::cerr << x;
+	}
+}
+@endcode
+
+Like in this example, by registering a plugin in a function marked with the
+constructor g++ attribute (<b>__attribute((constructor))</b>) lets the plugin
+get called even before main and other compiler generated initialization
+functions, to profile them as well. Note: if you register the plugin inside main
+the profiler <b>mod_exit</b> callback will be called for main when it returns!
+As you see in this example the <i>scope</i> argument, can be as complicated as
+you need it to be. The plugin object code will mangle the callback symbols and
+resolve them correctly, as long as their scope is correctly given and the
+callbacks are correctly coded, exported and linked.
+<!----------------------------------------------------------------------------->
+
+
+@subsection sec5_7 Using instrumentation filters
+<!----------------------------------------------------------------------------->
+
+
+@subsection sec5_8 Using the stack trace parser (syntax highlighter)
+
+Class csdbg::parser is a string buffer that can parse its contents using any
+arbitrary grammar (POSIX extended regular expressions). The predefined, default
+grammar defines a C++ stack trace as structured by libcsdbg both for exceptions
+and threads. A parser object equipped with this grammar can be used to perform
+<b>stack trace syntax highlighting</b> for VT100 terminals (XTerm, RXVT, GNOME
+terminal e.t.c). Subclasses of the default parser can be implemented to create
+highlighted stack traces for any rich text format (HTML, XML e.t.c). The default
+highlighter uses custom styles that describe how to render each type of token
+(function name, C++ keyword, intrinsic type e.t.c). This is implemented using
+the classes csdbg::dictionary and csdbg::style.
+
+Class csdbg::dictionary represents a named collection of words. Its tokens can
+be loaded from a <b>simple text file</b>. A parser may be equipped with multiple
+dictionaries and use them to lookup and identify tokens. The default parser
+object loads three dictionary data files, one for <b>C++ keywords</b>, one for
+<b>C++ intrinsic types</b> and one for <b>C++ file extensions</b>. The contents
+of a dictionary can be looked up as literals or as POSIX extended regular
+expressions.
+
+A csdbg::style object is a named set of VT100 text style attributes (foreground
+and background colors and text style indicators). The user of a parser object
+can register a style for each type of token, to create custom syntax
+highlighters. The following is an example of using the predefined libcsdbg
+syntax highlighter:
+
+@code
+using namespace csdbg;
+
+tracer *iface = tracer::interface();
+if ( unlikely(iface == NULL) )
+	return;
+
+...
+
+try {
+	...
+}
+
+catch (exception) {
+	try {
+		parser *p = parser::get_default();
+		p->clear();
+
+		iface->trace(*p);
+		std::cerr << x << "\r\n" << *p << "\r\n";
+	}
+
+	/*
+	 * In non instrumented code sections, like the above (all called functions
+	 * are not instrumented) you don't need to create stack traces or unwind
+	 * the simulated stack
+	 */
+	catch (...) {
+	}
+}
+
+iface->unwind();
+@endcode
+
+The following snippet shows how the default parser gets initialized, as an
+example on how to clone and customize your own syntax highlighters:
+
+@code
+/* Create the default parser */
+m_default = new parser;
+
+/*
+ * Equip the default parser with dictionaries for C++ keywords, intrinsic
+ * types and file extensions
+ */
+string path("%s/etc/keywords.dict", util::prefix());
+m_default->add_dictionary("keywords", path.cstr(), false);
+
+path.set("%s/etc/types.dict", util::prefix());
+m_default->add_dictionary("types", path.cstr(), false);
+
+path.set("%s/etc/extensions.dict", util::prefix());
+m_default->add_dictionary("extensions", path.cstr(), true);
+
+/*
+ * Create the default, fallback style. When a highlighter can't determine or
+ * create/obtain the correct style for a token, it uses the fallback
+ */
+m_fallback = new style("fallback");
+
+/* Add styles for all kinds of trace tokens to the default parser */
+style *s = m_fallback->clone();
+s->set_name("delimiter");
+m_default->add_style(s);
+
+s = m_fallback->clone();
+s->set_name("number");
+s->set_fgcolor(HLT_NUMBER_FG);
+s->set_attr_enabled(style::BOLD, true);
+m_default->add_style(s);
+
+s = m_fallback->clone();
+s->set_name("keyword");
+s->set_fgcolor(HLT_KEYWORD_FG);
+m_default->add_style(s);
+
+s = m_fallback->clone();
+s->set_name("type");
+s->set_fgcolor(HLT_TYPE_FG);
+s->set_attr_enabled(style::BOLD, true);
+m_default->add_style(s);
+
+s = m_fallback->clone();
+s->set_name("file");
+s->set_fgcolor(HLT_FILE_FG);
+m_default->add_style(s);
+
+s = m_fallback->clone();
+s->set_name("scope");
+s->set_fgcolor(HLT_SCOPE_FG);
+m_default->add_style(s);
+
+s = m_fallback->clone();
+s->set_name("function");
+s->set_fgcolor(HLT_FUNCTION_FG);
+s->set_attr_enabled(style::BOLD, true);
+m_default->add_style(s);
+@endcode
+
+To ease foreground/background color selection for your custom syntax highlighter
+styles, script <b>$PREFIX/vtcolors</b> prints all available colors of VT100
+compatible terminals.
+<!----------------------------------------------------------------------------->
+
+
+<!-- todo Update, add class util -->
+@subsection sec5_9 Using the internal libcsdbg API
+
+Although now you know everything you need, to produce and process any kind of
+<b>stack trace</b>, some libcsdbg types may still come in handy, for other, more
+generic purposes, although these types are quite specific and optimized for the
+project. This is why, some of these classes have some rather tricky details, so
+instead of getting lost in the code and comments to get an idea, some of them
+are shortly described here, with some of their most uncommon features.
+
+
+<b>Class csdbg::exception</b>
+
+This type is used internally by libcsdbg to propagate and process errors. It is
+also used by the library to report internal errors to the user. Users may use it
+or even subclass it for their own needs. An exception object can be constructed
+using <b>printf-style formatting</b> and a variable argument list (for its error
+message). Inside the constructor, copy constructor and assignment operator other
+formatting or allocation exceptions may be recursively thrown but they are
+internally caught and silently ignored. In these cases the object is still safe
+to use by ignoring its error message. The std::ostream insertion operator
+implementation and all exception methods take this into account. Although an
+exception object is not thread safe by itself, all overloaded std::ostream
+insertion operator implementations that output exceptions synchronize thread
+access.
+
+
+<b>Class csdbg::string</b>
+
+A string object is mainly used to create trace text. Text is easily appended
+using <b>printf-style format</b> strings expanded with variable argument lists.
+Memory is allocated in blocks (aligning) to reduce overhead when appending
+multiple small strings. It is comparable against <b>POSIX extended regular
+expressions</b>. By creating traces in string buffers it is easy to direct
+library output to any kind of stream (console, file, serial, network, plugin,
+device e.t.c). Apart from traces a string can be used for generic dynamic text
+manipulation. If the library is compiled with plugin support
+(<b>CSDBG_WITH_PLUGIN</b>) or with support for stack trace syntax highlighting
+(<b>CSDBG_WITH_HIGHLIGHT</b>) a string object gets equipped with a method to
+tokenize it using POSIX extended regular expressions and other advanced text
+processing methods. This class is not thread safe, the caller must implement
+thread sychronization.
+
+<b>Data structure classes csdbg::node, csdbg::chain and csdbg::stack</b>
+
+A node object, through its m_link member variable, can be linked to a single
+node (<b>direct addressing</b>), or to two nodes (<b>XOR linking</b>). Class
+csdbg::stack uses singly-linked nodes, class csdbg::chain is a doubly-linked
+list. A node can be instantiated only through the public methods of a chain or
+stack object. A node can point to data of any type (intrinsic or user defined)
+except arrays. When a node is released it also calls delete (not delete[]) on
+its data pointer, unless it's previously detached. Therefore each node must
+point to a single T and not a T[], otherwise memory leaks are bound to happen.
+When a node is copied or assigned, only its data are copied. Data copying
+invokes T(const T&) or T::operator=(const T&), exceptions thrown from these
+methods are not handled by the node nor its container, they are propagated up
+the call stack.
+
+A doubly-linked list is a great optimization compared with a singly-linked one
+in node access times and memory references, especially in very big lists. The
+XOR linking implementation, although a bit more complex, uses the same ammount
+of memory (per node) as a singly-linked list. The chain supports shared data
+(multiple chains can point to the same data) but it's not thread safe, callers
+should synchronize thread access. This implementation does not allow a node with
+a NULL or a duplicate data pointer. A node can be detached (dispose the node
+without deleting its data) or removed (dispose both node and data). A chain can
+be traversed using simple callbacks	and method chain::foreach.
+
+The stack supports shared data (multiple stacks can point to the same data) but
+it is not thread safe, callers should synchronize thread access. This
+implementation doesn't allow a node with a NULL or a duplicate data pointer. A
+stack can be traversed using simple callbacks and method stack::foreach. Apart
+from the legacy <b>push/pop</b> functions, node data can be accessed using stack
+offsets.
+
+<b>Class csdbg::symtab</b>
+
+A symtab object can load code from executables or dynamic shared objects with
+absolute addressing or position independent. It supports all the binary formats
+supported by the <b>libbfd backends</b> on the host (or target) machine (elf,
+coff, ecoff e.t.c). To optimize lookups the symbol table (as structured in
+libbfd) is parsed, the non-function symbols are discarded and function symbols
+are demangled <b>once</b> and stored in simpler data structures. A symtab can be
+traversed using simple callbacks and method csdbg::symtab::foreach. The access
+to a symtab is not thread safe the caller must implement thread synchronization.
+
+<b>Class csdbg::dictionary</b>
+
+A dictionary object is used to create a collection of tokens, under a common
+name. Dictionary data can be loaded from regular text files (.dict extension).
+Each non-empty line in the source file is translated as a single token. A line
+with only whitespace characters is considered an empty line. The tokens are
+trimmed to remove leading and trailing whitespace characters. If the source file
+is empty no tokens are loaded, but the dictionary object remains valid. The
+dictionary class inherits from csdbg::chain (T = csdbg::string) all its methods
+for item management. A dictionary can be looked up for literal strings or for
+POSIX extended regular expressions (with or without case sensitivity). If a word
+appears more than once, its first occurence is used. A dictionary is not thread
+safe, users must implement thread synchronization.
+
+<b>Class csdbg::process</b>
+
+An object of this class is an abstraction of the actual debugged process. It
+stores the whole instrumented namespace and the details of all the simulated
+threads and their stacks. The namespace consists of a number of symbol tables,
+one for each objective code module (executable and selected DSO libraries). A
+process object offers methods to perform batch symbol lookups, inverse lookups
+(given a resolved symbol find the module that defines it) and thread handling.
+A lookup cache is used internally to optimize symbol resolving. Access to the
+process object <b>is thread safe</b>.
+</p>
+<!----------------------------------------------------------------------------->
+
+
+@section sec6 Changelog
+<hr>
+@subsection sec6_1 Version 1.10
+
+<ul>
+<li>Header limits.h included to provide constants for library runtime configuration
+<li>Memory address bus default width was set to 64 bit
+<li>High level user API was made thread safe
+<li>RTTI checks were reworked in class util, chain and stack
+<li>Added checks for chain and stack overlapping
+<li>Class symbol_table was almost rewritten and got fully optimized by parsing
+		the original BFD tables, discard non-function symbols, demangle the rest and
+		store them in a chain. This change allows the symbol_table to be copied,
+		assigned and cloned, so these methods were made public and functional. The
+		same changes were propagated to class name_space
+<li>Added an optional symbol lookup cache (with its profiler) to class namespace
+		and defined a default name for unresolved symbols
+<li>Added methods exception::header, node::detach, chain::detach,
+		chain::detach_node, namespace::get_table_count, call_flow::enabled and
+		various thread accessor methods
+<li>Removed the debug enumerator from class chain, stack, thread, symbol_table,
+		name_space and call_flow
+<li>Inverse lookup was removed from class namespace and symbol_table
+<li>Namespace symbol lookup and current thread lookup was moved from class util
+		to class call_flow
+<li>Function simulation methods and simulated stack unwinding were moved from
+		class call_flow to class thread
+<li>Document generation system updated
+<li>Various code, comment and documentation typos corrected
+<li>Various minor bugs fixed
+<li>Script stats was reworked to collect objective code size only
+<li>Man page documentation was dropped
+<li>Added a signal handler (to demonstrate stack dumps) to the examples
+<li>Added user defined exceptions to the examples
+</ul>
+<!----------------------------------------------------------------------------->
+
+
+@subsection sec6_2 Version 1.11
+
+<ul>
+<li>Removed class call_flow
+<li>Added class call, string and tracer
+<li>Radically <b>simplified, beautified and optimized the whole internal and
+		exported library API</b>. Now, a global tracer object is used as the simple
+		interface to the library for all its features, from library construction and
+		destruction to DSO filtering and symbol table loading and parsing and from
+		symbol and thread lookup to trace creation in string buffers and output to
+		std::ostream objects using the <b>insertion operator</b>. The sum of changes
+		<b>dramatically</b> reduces the interfacing code from whole functions to a
+		couple of lines!
+<li><b>Heavily</b> optimized <b>all code</b> and removed all unused and obsolete
+		code
+<li>Added <b>addr2line</b> support and all needed infrastructure code in class
+		name_space and symbol_table (for inverse lookups)
+<li>Removed all RTTI checks from class object, util, chain and stack
+<li>Class name_space cache made mandatory, removed its profiler
+<li>Fixed a common memory leak in class chain, stack, name_space and thread
+<li>Added CSDBG_LIBS shell variable for DSO filtering
+<li>Overloaded std::ostream insertion operator for std::exception and
+		csdbg::exception objects
+<li>Heavily reworked the build system for portability, dropped the stats script,
+		added support for the example DSOs, for the new documentation system and to
+		reflect the new classes and the new API interface
+<li>Heavily reworked the documentation generation system in general and created
+		the first draft of the documentation overview and user manual pages
+<li>Started the <b>LaTeX/PDF</b> API reference documentation
+<li>Added complete example documentation
+<li>Heavily reworked the examples to simplify them and accomodate the radical
+		libcsdbg API changes
+<li>Added an example DSO that throws demo exceptions and code in the examples to
+		use the example DSO
+<li>Moved all example code to a new namespace (csdbg_extra)
+</ul>
+<!----------------------------------------------------------------------------->
+
+
+@subsection sec6_3 Version 1.12
+
+<ul>
+<li>Added class streambuf and filebuf (buffered output streams)
+<li>Added method tracer::init to load the library runtime configuration from the
+		command line arguments
+<li>Added method tracer::thread_by_id and tracer::cleanup_thread
+<li>Overloaded tracer::trace to create <b>thread</b> stack tracer
+<li>Added class throwable (as a more transparent interface API)
+<li>Updated the user manual (for PDF)
+<li>Added file documentation
+<li>Added example for buffered output streams and throwables
+</ul>
+<!----------------------------------------------------------------------------->
+
+
+@subsection sec6_4 Version 1.13
+
+<ul>
+<li>Reworked the API of the buffered output streams
+<li>Implemented the first draft version of LDP (Libcsdbg Debug Protocol)
+<li>Added method filebuf::unique_id and streambuf::header
+<li>Added class tcpsockbuf
+<li>Added example code to test/demonstrate the new output APIs
+<li>Minor changes to the documentation system (upgraded to doxygen 1.8.5)
+</ul>
+<!----------------------------------------------------------------------------->
+
+
+@subsection sec6_5 Version 1.14
+
+<ul>
+<li>This is a maintenance version
+<li>Added an iterator method (foreach) to class chain, stack, symbol_table and
+		name_space
+<li>Added methods to the thread interface API (thread_count, thread_at) of class
+		tracer
+<li>Added methods to process the CLI arguments (opt_count, getopt_at) to class
+		tracer and made getenv public
+<li>Added function try blocks to fix potential memory leaks in the constructors
+		of class symbol_table, name_space, tracer, streambuf, filebuf and tcpsockbuf
+<li>Finalized the implementation of LDP (filebuf::unique_id now takes a printf-
+		style format argument and timestamps are given in microseconds)
+<li>Added the final optimizations, fixes and beautifications to the code, to the
+		library API and the documentation for all current code
+<li>Dropped class throwable
+<li>Added assertions
+<li>Finalized the HTML documentation generation system
+<li>Added the 'Usage' section (with its 10 subsections) and an 'Examples and
+		Tutorials' section to the User Manual (both for HTML and PDF)
+<li>Removed all old examples and added the new Step examples (4) and the new
+		Tutorial examples (4) all with their complete documentation
+</ul>
+<!----------------------------------------------------------------------------->
+
+
+@subsection sec6_6 Version 1.15
+
+<ul>
+<li>Added class plugin
+<li>Added a user API to register/unregister and manage instrumentation plugins,
+		to class tracer (two register_plugin and unregister_plugin methods, method
+		plugin_count and plugin_at)
+<li>Dropped the PDF API reference manual and finalized the document generation
+		system for the PDF User Manual
+<li>Added a tutorial that demonstrates the use of the plugin API both for inline
+		plugins and for DSO modules
+<li>Added a tutorial plugin module DSO (mod_null.so)
+</ul>
+<!----------------------------------------------------------------------------->
+
+
+@subsection sec6_7 Version 1.16
+
+<ul>
+<li>Added a generic, adaptive, syntax parser/tokenizer in class string (method
+		split). This method is used for the plugin symbol mangler and is the base
+		for the stack trace syntax highlighter
+<li>Added support for the <b>C++ ABI</b> to class plugin and updated the class
+		tracer plugin management API
+<li>All typedefs where added to the csdbg namespace
+<li>API reference and User Manual are brought up to date (both HTML and PDF)
+<li>Added the full class plugin documentation to the User Manual under a new
+		section
+<li>Added the 'Changelog' section to the User Manual
+<li>Implemented a profiling module (plugin), mod_callgraph.so, that constructs
+		and prints to console the complete call graph of any multi-thread process.
+		This module was created both as an elaborate example of the plugin mechanism
+		and as a demonstration and proof of the power of the libcsdbg API as a base
+		for generic, user instrumentation code
+<li>Added an example step (inserted as step 4) to demonstrate to the full the
+		features of class plugin, using mod_callgraph as the plugin module
+<li>Tutorial plugin mod_null.so renamed to mod_test.so
+<li>Finalized the code and documentation for all current example code
+<li>Added three syntax highlighter vocabularies (for C++ types and keywords and
+		for source, header, assembler, inline and other C/C++ file extensions)
+</ul>
+<!----------------------------------------------------------------------------->
+
+
+@subsection sec6_8 Version 1.20
+
+<ul>
+<li>Added class dictionary
+<li>Added class highlighter
+<li>Added class style
+<li>Added case sensitivity flag in string::cmp
+<li>Added method string::trim
+<li>Fixed Makefile and header includes to reflect the Makefile::$DOPTS build configuration
+<li>Added Makefile target distclean
+<li>Added example and tutorial for the trace syntax highlighter
+<li>Added utility script <b>vt100_colors</b> (color sampler for highlighter customization)
+<li>Added dictionary source files for C++ keywords, integral types and file extensions
+</ul>
+<!----------------------------------------------------------------------------->
+
+
+@subsection sec6_9 Version 1.21
+
+<ul>
+<li>Class highlighter renamed to parser
+<li>Added thread names and all supporting infrastructure
+<li>Added lookup mode to class dictionary
+<li>Heavily reworked class style
+<li>Added methods plugin::destroy, string::insert and thread::foreach
+<li>Added method util::header and COLOR_TERM support for debug text
+<li>Added macros for the default syntax highlighter colors
+<li>Added various code optimizations and beautifications
+<li>Updated all examples to use/demonstrate thread names
+<li>Updated examples to make them more uniform
+<li>Added Makefile target distclean (clean the source tree from all generated files)
+<li>Added scripts vt100_bgcolors and vt100_fgcolors (VT100 palette samplers)
+<li>Added parser and trace syntax highlighter documentation
+<li>Added Makefile $DOPTS documentation
+</ul>
+<!----------------------------------------------------------------------------->
+
+
+@subsection sec6_10 Version 1.22
+
+<ul>
+<li>Changed LDP to support multiple messages through a unique session socket
+<li>Scripts vt100_fgcolors and vt100_bgcolors fused into vtcolors
+<li>Reconfigured the default syntax highlighter
+<li>Reworked examples to make them compatible with the new LDP architecture
+</ul>
+<!----------------------------------------------------------------------------->
+
+
+@subsection sec6_11 Version 1.23
+
+<ul>
+<li>Added class csdbg::sttybuf
+<li>Added method style::is_attr_enabled and style::set_attr_enabled
+<li>Removed method style::has_attributes and style::add_attributes
+<li>Reworked script vtcolors
+</ul>
+<!----------------------------------------------------------------------------->
+
+
+@subsection sec6_12 Version 1.24
+
+<ul>
+<li>Reworked the build system
+<li>Reworked the documentation generators
+<li>Reworked the library compile-time configuration
+<li>Detection of memory bus width and endianity made automatic (and portable)
+<li>Recode of class csdbg::chain to make it a doubly-linked list (using XOR linking)
+<li>Added method filebuf::sync, filebuf::seek_to, filebuf::truncate
+<li>Added method util::min
+<li>Added XOR linking capability to csdbg::node (node::link, node::operator^)
+<li>Renamed class csdbg::symbol_table to csdbg::symtab
+</ul>
+<!----------------------------------------------------------------------------->
+
+
+@subsection sec6_13 Version 1.25
+
+<ul>
+<li>Removed class csdbg::name_space
+<li>Added class csdbg::process
+<li>Added method dictionary::set_name
+<li>Added method filebuf::seek_to and filebuf::resize
+<li>Added method parser::get_fallback_style
+<li>Added method streambuf::sync, streambuf::lock and streambuf::unlock
+<li>Added method sttybuf::set_baud, sttybuf::is_tty, sttybuf::open and sttybuf::sync
+<li>Added method util::memcpy, util::is_regular, util::is_chardev, util::is_readable and util::is_writable
+<li>All examples, tutorials and example DSO and plugin modules are moved to a separate package (libcsdbg-extra)
+<li>Added code to process plugin stray exceptions
+<li>Object filebuf now appends to file by default and added file checks
+<li>Fixed a bug in parser::highlight
+<li>Fixed various minor bugs and omittions
+<li>Fixed a bug in dictionary 'extensions.dict'
+<li>Replaced name_space with process in csdbg::tracer, to declutter and simplify
+</ul>
+<!----------------------------------------------------------------------------->
+
+
+@subsection sec6_14 Version 1.26
+<ul>
+<li>Added useful assertions to various methods, as needed
+<li>Added method node::link_to and node::unlink_from
+<li>Added method parser::remove_all_dictionaries, parser::get_dictionary_names
+		parser::remove_all_styles and parser::get_style_names
+<li>Added method overload parser::lookup
+<li>Added method streambuf::is_opened
+<li>Added method overload string::set
+<li>Added method tcpsockbuf::is_connected and tcpsockbuf::set_option
+</ul>
+<!----------------------------------------------------------------------------->
+
+
+@subsection sec6_15 Version 1.27
+<ul>
+<li>Method streambuf::sync was made abstract
+<li>Added filebuf::sync(bool) overload
+<li>Added tracer::get_plugin(const i8*) overload
+<li>Added string::bufsize, string::available, string::shred
+<li>Added streambuf::config, streambuf::discard, streambuf::sync
+<li>Added thread::is_current
+<li>Replaced process::thread_by_* and process::thread_at with multiple process::get_thread overloads
+<li>Variable tracer::m_plugins and the plugin interface were made non-static
+<li>Removed tracer::lookup, tracer::current_thread
+<li>Moved getenv, init, argc and argv methods from class tracer to util
+<li>Added class util library constructor and destructor and moved m_config static member variable from class tracer to util
+<li>Added more system call checks (for <b>EINTR and EAGAIN</b>) to streambuf, filebuf and sttybuf
+<li>Made class process API methods thread safe
+<li>Added plugin stray exception handling
+<li>Minimized accepted baud rates to a useful common set in sttybuf
+<li>Added lots of assertions to all classes
+<li>Fixed various minor bugs
+</ul><br>
+<!----------------------------------------------------------------------------->
+
+
+@subsection sec6_16 Version 1.28
+<ul>
+<li>Added class csdbg::filter
+<li>Added instrumentation filter support to class csdbg::tracer
+<li>Added methods tracer::destroy, tracer::filter_count, tracer::add_filter, tracer::remove_filter and tracer::get_filter
+<li>Added the open(...) == EINTR | EAGAIN check where needed
+<li>Made streambuf::sync, streambuf::lock and streambuf::unlock const methods
+<li>Made sttybuf::sync, sttybuf::config and sttybuf::discard const methods
+<li>Made tcpsockbuf::sync and tcpsockbuf::shutdown const methods
+<li>Made filebuf::sync(...) a const method
+</ul>
+<!----------------------------------------------------------------------------->
+*/
+

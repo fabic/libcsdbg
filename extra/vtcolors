@@ -1,0 +1,66 @@
+#!/bin/bash
+
+# Prints all available colors (foreground or background) of VT100 compatible
+# terminals (XTerm, RXVT, GNOME Terminal e.t.c). Use it as a guide to setup
+# custom stack trace syntax highlighters
+
+# Show script usage message and exit
+usage()
+{
+	echo="echo -e"
+	name=`basename $0`
+
+	$echo "VT100 color palette"
+	$echo "Usage: $name [-b] [-h]\r\n"
+
+	$echo "'$name' prints all available VT100 terminal foreground (text) colors."
+	$echo "The following options change the default behaviour:\r\n"
+
+	$echo "-b  Print background colors"
+	$echo "-h  Show this message"
+	exit 1
+}
+
+
+# Foreground/background selector switch
+set=38
+
+# Row size
+rowsz=16
+
+
+# Parse command line arguments
+for opt in "$@" ;
+do
+	if [ "$opt" == "-b" ];
+	then
+		let set=48
+
+	else
+		usage
+	fi
+done
+
+
+# Print colors
+for color in {0..255};
+do
+	echo -en "\e[1m\e[$set;5;${color}m "
+
+	if [ $color -lt 10 ];
+	then
+		echo -n "  "
+
+	elif [ $color -lt 100 ];
+	then
+		echo -n " "
+	fi
+
+	echo -en "$color \e[0m"
+	if [ $((($color + 1) % $rowsz)) == 0 ];
+	then
+		echo
+	fi
+done
+exit 0
+
