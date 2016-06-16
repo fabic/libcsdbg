@@ -18,7 +18,7 @@ _Couldn't find any SVN / Git repository for this so I'm quickly adding it under 
 
 ### Branch `clang`
 
-* Branch [`clang`](/tree/clang)
+* Clang++ can build it, see branch [`clang`](https://github.com/fabic/libcsdbg/tree/clang).
 
 ## Build instructions
 
