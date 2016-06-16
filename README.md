@@ -16,6 +16,11 @@ _Couldn't find any SVN / Git repository for this so I'm quickly adding it under 
 * Added a symlink `build` to the hidden `.build/` directory.
 * _(Note that a `.deps` file left by `make` may get in your way)._
 
+### Branch `clang`
+
+* Slightly altered the [`Makefile`](/fabic/libcsdbg/blob/clang/Makefile)
+  for having Clang++ build it (had to remove compiler flag `-fno-enforce-eh-specs`).
+
 ## Build instructions
 
 * See <http://libcsdbg.sourceforge.net/index.html#sec3>
