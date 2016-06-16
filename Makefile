@@ -70,6 +70,7 @@ FOPTS				=		PIC
 #        See http://clang-developers.42468.n3.nabble.com/Does-clang-support-fno-enforce-eh-specs-option-of-gcc-td4028196.html (2012 forum thread)
 #FOPTS				+=	no-enforce-eh-specs
 FOPTS				+=	strict-aliasing
+FOPTS				+=	rtti
 
 # -W options
 WOPTS				=		all
@@ -96,14 +97,15 @@ WOPTS				+=	type-limits
 # WOPTS			+=	old-style-cast
 
 # Generic options
-GOPTS				=		O2
+GOPTS				=	g
+GOPTS				+=	O0
 GOPTS				+=	rdynamic
 GOPTS				+=	march=native
-GOPTS				+=	std=gnu++0x
+GOPTS				+=	std=c++14
 
 
 # Compiler flag setup
-CFLAGS			=		$(foreach o, $(GOPTS), -$(o))
+CFLAGS			=	$(foreach o, $(GOPTS), -$(o))
 CFLAGS			+=	$(foreach w, $(WOPTS), -W$(w))
 CFLAGS			+=	$(foreach f, $(FOPTS), -f$(f))
 CFLAGS			+=	$(foreach d, $(DOPTS), -D$(d))
