@@ -18,7 +18,7 @@ _Couldn't find any SVN / Git repository for this so I'm quickly adding it under 
 
 ### Branch `clang`
 
-* Slightly altered the [`Makefile`](/fabic/libcsdbg/blob/clang/Makefile)
+* Slightly altered the [`Makefile`](Makefile)
   for having Clang++ build it (had to remove compiler flag `-fno-enforce-eh-specs`).
 
 ## Build instructions
